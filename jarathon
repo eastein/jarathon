@@ -6,17 +6,21 @@ import subprocess
 import random
 import numpy as np
 import matplotlib.pyplot as plt
+import threading
+import Queue
 
 def jmap(pid) :
 	match = re.compile('^[ ]+[0-9]+:[ ]+([0-9]+)[ ]+([0-9]+)[ ]+([^ ]+)')
 	cmd = ['jmap', '-histo', '%d' % pid]
 	p = subprocess.Popen(cmd, stdout=subprocess.PIPE, bufsize=1048576, stderr=subprocess.STDOUT)
 	out, err = p.communicate()
+	ret = []
 	for l in out.split("\n") :
 		m = match.match(l)
 		if m :
 			count, bytes, name = int(m.group(1)), int(m.group(2)), m.group(3)
-			yield count, bytes, name
+			ret.append((count, bytes, name))
+	return ret
 
 def randomcolor() :
 	def rc() :
@@ -30,7 +34,7 @@ def randomcolor() :
 	return '#' + rc() + rc() + rc()
 
 def areaplot(samples, data_rows) :
-	N = 10
+	N = samples
 
 	plt.figure()
 
@@ -61,11 +65,73 @@ def areaplot(samples, data_rows) :
 
 	plt.show()
 
+class JavaHistoThread(threading.Thread) :
+	def __init__(self, pid, rate=10) :
+		self.pid = pid
+		self.rate = rate
+		self.dataq = Queue.Queue()
+		self.stopq = Queue.Queue()
+		threading.Thread.__init__(self)
+
+	def run(self) :
+		cont = True
+		while cont :
+			self.dataq.put(jmap(self.pid))
+
+			try :
+				cont = self.stopq.get(timeout=self.rate)
+			except Queue.Empty :
+				pass
+		self.dataq.put(None)
+
+def display_jmap_history(jmaps, classes) :
+	integrals = {}
+	for j_map in jmaps :
+		for k in j_map :
+			integrals.setdefault(k, 0)
+			integrals[k] += j_map[k]
+	totals = []
+	for k in integrals :
+		totals.append((k, integrals[k]))
+	totals.sort(reverse=True, cmp=lambda x,y: long.__cmp__(long(x[1]), long(y[1])))
+
+	top_names = [name for name, integ in totals[0:classes]]
+	samples = len(jmaps)
+	data = []
+	for name in top_names :
+		points = []
+		for i in range(samples) :
+			if name in jmaps[i] :
+				points.append(jmaps[i][name])
+			else :
+				points.append(0)
+		data.append((name, points))
+	areaplot(samples, data)
+
 if __name__ == '__main__' :
 	pid = int(sys.argv[1])
-	jmap(pid)
-	areaplot(10, [
-		('A', [70, 88, 78, 93, 99, 58, 89, 66, 77, 78]),
-		('B', [73, 65, 78, 87, 97, 57, 77, 88, 69, 78]),
-		('C', [66, 98, 88, 67, 99, 88, 62, 70, 90, 73])
-	])
+	classes = 15
+
+	jmap_thr = JavaHistoThread(pid)
+	jmap_thr.start()
+
+	try :
+		j_maps = []
+		while True :
+			try :
+				j_map = jmap_thr.dataq.get(timeout=1)
+			except Queue.Empty :
+				continue
+
+			if j_map is None :
+				raise KeyboardInterrupt
+
+			name_to_bytes = {}
+			# j_map is a list of (count, bytes, name)
+			for count, bytes, name in j_map :
+				name_to_bytes[name] = bytes
+			j_maps.append(name_to_bytes)
+			display_jmap_history(j_maps, classes)
+	except KeyboardInterrupt :
+		jmap_thr.stopq.put(None)
+		jmap_thr.join()
