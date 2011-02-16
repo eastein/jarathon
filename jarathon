@@ -1,0 +1,71 @@
+#!/usr/bin/env python
+
+import re
+import sys
+import subprocess
+import random
+import numpy as np
+import matplotlib.pyplot as plt
+
+def jmap(pid) :
+	match = re.compile('^[ ]+[0-9]+:[ ]+([0-9]+)[ ]+([0-9]+)[ ]+([^ ]+)')
+	cmd = ['jmap', '-histo', '%d' % pid]
+	p = subprocess.Popen(cmd, stdout=subprocess.PIPE, bufsize=1048576, stderr=subprocess.STDOUT)
+	out, err = p.communicate()
+	for l in out.split("\n") :
+		m = match.match(l)
+		if m :
+			count, bytes, name = int(m.group(1)), int(m.group(2)), m.group(3)
+			yield count, bytes, name
+
+def randomcolor() :
+	def rc() :
+		i = random.randint(0,255)
+		h = hex(i)
+		if h.startswith('0x') :
+			h = h[2:]
+		if len(h) == 1 :
+			h = '0' + h
+		return h
+	return '#' + rc() + rc() + rc()
+
+def areaplot(samples, data_rows) :
+	N = 10
+
+	plt.figure()
+
+	bar_names = []
+	bar_arrays = []
+	for name, data in data_rows :
+		bar_names.append(name)
+		bar_arrays.append(np.array(data))
+
+	ind = np.arange(N)
+	width = 0.2
+
+	bars = []
+	for i in range(len(data_rows)) :
+		kw = {}
+		if i != 0 :
+			kw['bottom'] = reduce(lambda x,y: x+y, bar_arrays[0:i])
+		bars.append(plt.bar(ind, bar_arrays[i], width, color=randomcolor(), **kw))
+
+	plt.ylabel('Bytes')
+	plt.title('Sample')
+
+	plt.xticks(ind+width/2., tuple(['%d' % (i+1) for i in range(N)]))
+	plt.yticks(np.arange(0,300,N))
+
+	plt.legend(tuple([b[0] for b in bars]), tuple(bar_names))
+	plt.grid(True)
+
+	plt.show()
+
+if __name__ == '__main__' :
+	pid = int(sys.argv[1])
+	jmap(pid)
+	areaplot(10, [
+		('A', [70, 88, 78, 93, 99, 58, 89, 66, 77, 78]),
+		('B', [73, 65, 78, 87, 97, 57, 77, 88, 69, 78]),
+		('C', [66, 98, 88, 67, 99, 88, 62, 70, 90, 73])
+	])
