@@ -69,7 +69,7 @@ def areaplot(samples, data_rows, max=300, ticks=20) :
 	plt.show()
 
 class JavaHistoThread(threading.Thread) :
-	def __init__(self, pid, rate=10) :
+	def __init__(self, pid, rate) :
 		self.pid = pid
 		self.rate = rate
 		self.dataq = Queue.Queue()
@@ -80,7 +80,7 @@ class JavaHistoThread(threading.Thread) :
 		cont = True
 		while cont :
 			self.dataq.put(jmap(self.pid))
-
+			
 			try :
 				cont = self.stopq.get(timeout=self.rate)
 			except Queue.Empty :
@@ -122,26 +122,28 @@ if __name__ == '__main__' :
 	pid = int(sys.argv[1])
 	classes = 15
 
-	jmap_thr = JavaHistoThread(pid)
+	jmap_thr = JavaHistoThread(pid, 5)
 	jmap_thr.start()
 
 	try :
 		j_maps = []
 		while True :
 			try :
-				j_map = jmap_thr.dataq.get(timeout=1)
+				while True :
+					j_map = jmap_thr.dataq.get(timeout=1)
+					if j_map :
+						name_to_bytes = {}
+						# j_map is a list of (count, bytes, name)
+						for count, bytes, name in j_map :
+							name_to_bytes[name] = bytes
+						j_maps.append(name_to_bytes)
 			except Queue.Empty :
 				continue
 
 			if j_map is None :
 				raise KeyboardInterrupt
-
-			name_to_bytes = {}
-			# j_map is a list of (count, bytes, name)
-			for count, bytes, name in j_map :
-				name_to_bytes[name] = bytes
-			j_maps.append(name_to_bytes)
-			display_jmap_history(j_maps, classes)
 	except KeyboardInterrupt :
 		jmap_thr.stopq.put(None)
 		jmap_thr.join()
+
+	display_jmap_history(j_maps, classes)
