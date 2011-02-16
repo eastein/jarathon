@@ -5,9 +5,12 @@ import sys
 import subprocess
 import random
 import numpy as np
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import threading
 import Queue
+
+mpl.rcParams['legend.fontsize'] = '8.0'
 
 def jmap(pid) :
 	match = re.compile('^[ ]+[0-9]+:[ ]+([0-9]+)[ ]+([0-9]+)[ ]+([^ ]+)')
@@ -33,7 +36,7 @@ def randomcolor() :
 		return h
 	return '#' + rc() + rc() + rc()
 
-def areaplot(samples, data_rows) :
+def areaplot(samples, data_rows, max=300, ticks=20) :
 	N = samples
 
 	plt.figure()
@@ -58,7 +61,7 @@ def areaplot(samples, data_rows) :
 	plt.title('Sample')
 
 	plt.xticks(ind+width/2., tuple(['%d' % (i+1) for i in range(N)]))
-	plt.yticks(np.arange(0,300,N))
+	plt.yticks(np.arange(0,max,max/ticks))
 
 	plt.legend(tuple([b[0] for b in bars]), tuple(bar_names))
 	plt.grid(True)
@@ -106,7 +109,14 @@ def display_jmap_history(jmaps, classes) :
 			else :
 				points.append(0)
 		data.append((name, points))
-	areaplot(samples, data)
+
+	# determine how tall the plot gets
+	top = 0
+	for i in range(samples) :
+		v = reduce(lambda x,y: x+y, [classdata[1][i] for classdata in data])
+		top = max(top, v)
+
+	areaplot(samples, data, max=top)
 
 if __name__ == '__main__' :
 	pid = int(sys.argv[1])
