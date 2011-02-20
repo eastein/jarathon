@@ -87,7 +87,7 @@ class JavaHistoThread(threading.Thread) :
 				pass
 		self.dataq.put(None)
 
-def display_jmap_history(jmaps, classes) :
+def display_jmap_history(jmaps, classes, max_bars=20) :
 	integrals = {}
 	for j_map in jmaps :
 		for k in j_map :
@@ -119,10 +119,10 @@ def display_jmap_history(jmaps, classes) :
 	areaplot(samples, data, max=top)
 
 if __name__ == '__main__' :
-	pid = int(sys.argv[1])
-	classes = 15
+	pid = int(sys.argv[2])
+	classes = 25
 
-	jmap_thr = JavaHistoThread(pid, 5)
+	jmap_thr = JavaHistoThread(pid, int(sys.argv[1]))
 	jmap_thr.start()
 
 	try :
